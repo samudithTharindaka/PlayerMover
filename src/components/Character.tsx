@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Group, AnimationMixer } from 'three';
+import { Group, AnimationMixer, AnimationAction, AnimationClip } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 
@@ -12,6 +12,8 @@ export const Character = ({ position }: CharacterProps) => {
   const group = useRef<Group>(null);
   const mixer = useRef<AnimationMixer | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
+  const idleAnimations = useRef<AnimationClip[]>([]);
+  const currentAction = useRef<AnimationAction | null>(null);
 
   // Load the 3D model using Three.js GLTFLoader
   useEffect(() => {
@@ -31,12 +33,23 @@ export const Character = ({ position }: CharacterProps) => {
           const animMixer = new AnimationMixer(loadedModel);
           mixer.current = animMixer;
 
-          // Play the first animation (Idle)
-          const clip = gltf.animations[0];
-          const animAction = animMixer.clipAction(clip);
-          animAction.play();
-          
-          console.log('Playing animation:', clip.name);
+          // Find all idle animations (Idle, HappyIdle, etc.)
+          idleAnimations.current = gltf.animations.filter(clip => 
+            clip.name.toLowerCase().includes('idle')
+          );
+
+          console.log('Found idle animations:', idleAnimations.current.map(a => a.name));
+
+          // Play a random idle animation to start
+          if (idleAnimations.current.length > 0) {
+            const randomIdle = idleAnimations.current[
+              Math.floor(Math.random() * idleAnimations.current.length)
+            ];
+            const action = animMixer.clipAction(randomIdle);
+            action.play();
+            currentAction.current = action;
+            console.log('Playing animation:', randomIdle.name);
+          }
         }
       },
       (progress) => {
@@ -56,6 +69,44 @@ export const Character = ({ position }: CharacterProps) => {
       }
     };
   }, []);
+
+  // Randomly switch between idle animations
+  useEffect(() => {
+    if (!mixer.current || idleAnimations.current.length <= 1) return;
+
+    const switchIdleAnimation = () => {
+      // Pick a random idle animation
+      const randomIdle = idleAnimations.current[
+        Math.floor(Math.random() * idleAnimations.current.length)
+      ];
+
+      if (mixer.current && currentAction.current) {
+        const nextAction = mixer.current.clipAction(randomIdle);
+        
+        // Smooth transition
+        currentAction.current.fadeOut(0.5);
+        nextAction.reset().fadeIn(0.5).play();
+        currentAction.current = nextAction;
+        
+        console.log('Switching to:', randomIdle.name);
+      }
+    };
+
+    // Switch idle animation every 5-10 seconds (random interval)
+    const scheduleNext = () => {
+      const randomDelay = 5000 + Math.random() * 5000; // 5-10 seconds
+      return setTimeout(() => {
+        switchIdleAnimation();
+        scheduleNext();
+      }, randomDelay);
+    };
+
+    const timeoutId = scheduleNext();
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [model]);
 
   // Update animation mixer on each frame
   useFrame((_state, delta) => {
