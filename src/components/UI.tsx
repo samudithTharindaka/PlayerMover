@@ -15,6 +15,8 @@ export const UI = () => {
               <div>Move Left</div>
               <div>D / →</div>
               <div>Move Right</div>
+              <div>Shift</div>
+              <div>Hold to Run</div>
             </div>
             <p className="text-xs text-gray-300 mt-2">Use keyboard to move the purple box</p>
           </div>

@@ -2,8 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-export const useMovement = (speed: number = 0.1) => {
-  const [position, setPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, 0.5, 0));
+export interface MovementState {
+  position: THREE.Vector3;
+  isMoving: boolean;
+  isRunning: boolean;
+}
+
+export const useMovement = (walkSpeed: number = 0.1, runSpeed: number = 0.25) => {
+  const [state, setState] = useState<MovementState>({
+    position: new THREE.Vector3(0, 0.5, 0),
+    isMoving: false,
+    isRunning: false,
+  });
+  
   const keysPressed = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -26,30 +37,50 @@ export const useMovement = (speed: number = 0.1) => {
 
   useFrame(() => {
     const keys = keysPressed.current;
-    const newPosition = position.clone();
+    const newPosition = state.position.clone();
+    
+    // Check if Shift is pressed for running
+    const isRunning = keys.has('shift');
+    const speed = isRunning ? runSpeed : walkSpeed;
+    
+    let moved = false;
 
-    // Forward/Backward (W/S or ArrowUp/ArrowDown)
+    // Forward/Backward
     if (keys.has('w') || keys.has('arrowup')) {
       newPosition.z -= speed;
+      moved = true;
     }
     if (keys.has('s') || keys.has('arrowdown')) {
       newPosition.z += speed;
+      moved = true;
     }
 
-    // Left/Right (A/D or ArrowLeft/ArrowRight)
+    // Left/Right
     if (keys.has('a') || keys.has('arrowleft')) {
       newPosition.x -= speed;
+      moved = true;
     }
     if (keys.has('d') || keys.has('arrowright')) {
       newPosition.x += speed;
+      moved = true;
     }
 
-    // Only update if position changed
-    if (!newPosition.equals(position)) {
-      setPosition(newPosition);
+    // Update state if anything changed
+    const stateChanged = 
+      !newPosition.equals(state.position) || 
+      moved !== state.isMoving || 
+      (moved && isRunning) !== state.isRunning;
+
+    if (stateChanged) {
+      setState({
+        position: newPosition,
+        isMoving: moved,
+        isRunning: moved && isRunning,
+      });
     }
   });
 
-  return position;
+  return state;
 };
+
 
