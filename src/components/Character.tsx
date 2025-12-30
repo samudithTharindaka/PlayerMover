@@ -15,6 +15,7 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
   const mixer = useRef<AnimationMixer | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
   const idleAnimations = useRef<AnimationClip[]>([]);
+  const walkAnimation = useRef<AnimationClip | null>(null);
   const runAnimation = useRef<AnimationClip | null>(null);
   const currentAction = useRef<AnimationAction | null>(null);
   const idleSwitchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -25,7 +26,7 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
     let loadedModel: THREE.Group;
     let allAnimations: AnimationClip[] = [];
     
-    // Load main character
+    // Load main character (HappyIdle)
     loader.load(
       '/models/character.glb',
       (gltf) => {
@@ -33,62 +34,113 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
         console.log('Main animations:', gltf.animations.map(a => a.name));
         
         loadedModel = gltf.scene;
-        allAnimations = [...gltf.animations];
         
-        // Now load the running animation
+        // Keep only HappyIdle from main character
+        const happyIdle = gltf.animations.find(clip => 
+          clip.name.toLowerCase().includes('happy')
+        );
+        if (happyIdle) {
+          allAnimations.push(happyIdle);
+          console.log('Extracted HappyIdle from character.glb');
+        }
+        
+        // Load characterIdle.glb for Idle animation
         loader.load(
-          '/models/characterRun.glb',
-          (runGltf) => {
-            console.log('Run character loaded');
-            console.log('Run animations:', runGltf.animations.map(a => a.name));
+          '/models/characterIdle.glb',
+          (idleGltf) => {
+            console.log('Idle character loaded');
+            console.log('Idle animations:', idleGltf.animations.map(a => a.name));
             
-            // Extract all animations from characterRun.glb (it only contains running animation)
-            if (runGltf.animations.length > 0) {
-              runGltf.animations.forEach(clip => {
-                const clonedClip = clip.clone();
-                // Rename for easier identification
-                clonedClip.name = 'Running';
-                allAnimations.push(clonedClip);
-              });
-              
-              console.log('Merged animations:', allAnimations.map(a => a.name));
+            if (idleGltf.animations.length > 0) {
+              const idleClip = idleGltf.animations[0].clone();
+              idleClip.name = 'Idle';
+              allAnimations.push(idleClip);
+              console.log('Extracted Idle from characterIdle.glb');
             }
             
-            // Setup animation mixer with all animations
-            const animMixer = new AnimationMixer(loadedModel);
-            mixer.current = animMixer;
-            
-            // Categorize animations
-            idleAnimations.current = allAnimations.filter(clip => 
-              clip.name.toLowerCase().includes('idle')
+            // Load characterWalk.glb for Walk animation
+            loader.load(
+              '/models/characterWalk.glb',
+              (walkGltf) => {
+                console.log('Walk character loaded');
+                console.log('Walk animations:', walkGltf.animations.map(a => a.name));
+                
+                if (walkGltf.animations.length > 0) {
+                  const walkClip = walkGltf.animations[0].clone();
+                  walkClip.name = 'Walking';
+                  allAnimations.push(walkClip);
+                  console.log('Extracted Walk from characterWalk.glb');
+                }
+                
+                // Load characterRun.glb for Running animation
+                loader.load(
+                  '/models/characterRun.glb',
+                  (runGltf) => {
+                    console.log('Run character loaded');
+                    console.log('Run animations:', runGltf.animations.map(a => a.name));
+                    
+                    if (runGltf.animations.length > 0) {
+                      const runClip = runGltf.animations[0].clone();
+                      runClip.name = 'Running';
+                      allAnimations.push(runClip);
+                      console.log('Extracted Running from characterRun.glb');
+                    }
+                    
+                    console.log('All merged animations:', allAnimations.map(a => a.name));
+                    
+                    // Setup animation mixer with all animations
+                    const animMixer = new AnimationMixer(loadedModel);
+                    mixer.current = animMixer;
+                    
+                    // Categorize animations
+                    idleAnimations.current = allAnimations.filter(clip => 
+                      clip.name.toLowerCase().includes('idle')
+                    );
+                    
+                    const walkAnims = allAnimations.filter(clip => 
+                      clip.name.toLowerCase().includes('walk')
+                    );
+                    walkAnimation.current = walkAnims.length > 0 ? walkAnims[0] : null;
+                    
+                    const runAnims = allAnimations.filter(clip => 
+                      clip.name.toLowerCase().includes('running')
+                    );
+                    runAnimation.current = runAnims.length > 0 ? runAnims[0] : null;
+                    
+                    console.log('Idle animations:', idleAnimations.current.map(a => a.name));
+                    console.log('Walk animation:', walkAnimation.current?.name);
+                    console.log('Run animation:', runAnimation.current?.name);
+                    
+                    setModel(loadedModel);
+                    
+                    // Play initial idle animation
+                    if (idleAnimations.current.length > 0) {
+                      const randomIdle = idleAnimations.current[
+                        Math.floor(Math.random() * idleAnimations.current.length)
+                      ];
+                      const action = animMixer.clipAction(randomIdle);
+                      action.play();
+                      currentAction.current = action;
+                      console.log('Playing initial animation:', randomIdle.name);
+                    }
+                  },
+                  undefined,
+                  (error: unknown) => {
+                    console.error('Error loading run character:', error);
+                    setModel(loadedModel);
+                  }
+                );
+              },
+              undefined,
+              (error: unknown) => {
+                console.error('Error loading walk character:', error);
+                setModel(loadedModel);
+              }
             );
-            
-            // The animation from characterRun.glb is now named 'Running'
-            const runAnims = allAnimations.filter(clip => 
-              clip.name.toLowerCase().includes('running')
-            );
-            runAnimation.current = runAnims.length > 0 ? runAnims[0] : null;
-            
-            console.log('Idle animations:', idleAnimations.current.map(a => a.name));
-            console.log('Run animation:', runAnimation.current?.name);
-            
-            setModel(loadedModel);
-            
-            // Play initial idle animation
-            if (idleAnimations.current.length > 0) {
-              const randomIdle = idleAnimations.current[
-                Math.floor(Math.random() * idleAnimations.current.length)
-              ];
-              const action = animMixer.clipAction(randomIdle);
-              action.play();
-              currentAction.current = action;
-              console.log('Playing initial animation:', randomIdle.name);
-            }
           },
           undefined,
           (error: unknown) => {
-            console.error('Error loading run character:', error);
-            // Continue without run animation
+            console.error('Error loading idle character:', error);
             setModel(loadedModel);
           }
         );
@@ -125,9 +177,9 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
     if (isMoving && isRunning && runAnimation.current) {
       // Running
       targetClip = runAnimation.current;
-    } else if (isMoving && idleAnimations.current.length > 0) {
-      // Walking (use idle animation for now)
-      targetClip = idleAnimations.current[0];
+    } else if (isMoving && walkAnimation.current) {
+      // Walking
+      targetClip = walkAnimation.current;
     } else if (!isMoving && idleAnimations.current.length > 0) {
       // Idle - pick a random one
       targetClip = idleAnimations.current[
