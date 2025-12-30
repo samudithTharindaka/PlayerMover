@@ -6,7 +6,7 @@ import * as THREE from 'three';
 const GroundPlane = () => {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-      <planeGeometry args={[20, 20, 20, 20]} />
+      <planeGeometry args={[120, 120, 20, 20]} />
       <meshStandardMaterial color="#374151"  />
     </mesh>
   );
@@ -17,7 +17,7 @@ export const GameCanvas = () => {
       <Canvas
         camera={{
           position: [8, 6, 8],
-          fov: 50,
+          fov: 30,
         }}
         shadows
         gl={{ 
