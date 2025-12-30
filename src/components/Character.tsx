@@ -42,14 +42,12 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
             console.log('Run character loaded');
             console.log('Run animations:', runGltf.animations.map(a => a.name));
             
-            // Extract running animation(s) and add to main character
-            const runningClips = runGltf.animations.filter(clip => 
-              clip.name.toLowerCase().includes('run')
-            );
-            
-            if (runningClips.length > 0) {
-              runningClips.forEach(clip => {
+            // Extract all animations from characterRun.glb (it only contains running animation)
+            if (runGltf.animations.length > 0) {
+              runGltf.animations.forEach(clip => {
                 const clonedClip = clip.clone();
+                // Rename for easier identification
+                clonedClip.name = 'Running';
                 allAnimations.push(clonedClip);
               });
               
@@ -65,8 +63,9 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
               clip.name.toLowerCase().includes('idle')
             );
             
+            // The animation from characterRun.glb is now named 'Running'
             const runAnims = allAnimations.filter(clip => 
-              clip.name.toLowerCase().includes('run')
+              clip.name.toLowerCase().includes('running')
             );
             runAnimation.current = runAnims.length > 0 ? runAnims[0] : null;
             
