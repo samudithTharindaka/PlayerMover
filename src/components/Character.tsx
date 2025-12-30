@@ -14,11 +14,10 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
   const group = useRef<Group>(null);
   const mixer = useRef<AnimationMixer | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
-  const idleAnimations = useRef<AnimationClip[]>([]);
+  const happyIdleAnimation = useRef<AnimationClip | null>(null);
   const walkAnimation = useRef<AnimationClip | null>(null);
   const runAnimation = useRef<AnimationClip | null>(null);
   const currentAction = useRef<AnimationAction | null>(null);
-  const idleSwitchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load the 3D models and merge animations
   useEffect(() => {
@@ -44,23 +43,9 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
           console.log('Extracted HappyIdle from character.glb');
         }
         
-        // Load characterIdle.glb for Idle animation
+        // Load characterWalk.glb for Walk animation
         loader.load(
-          '/models/characterIdle.glb',
-          (idleGltf) => {
-            console.log('Idle character loaded');
-            console.log('Idle animations:', idleGltf.animations.map(a => a.name));
-            
-            if (idleGltf.animations.length > 0) {
-              const idleClip = idleGltf.animations[0].clone();
-              idleClip.name = 'Idle';
-              allAnimations.push(idleClip);
-              console.log('Extracted Idle from characterIdle.glb');
-            }
-            
-            // Load characterWalk.glb for Walk animation
-            loader.load(
-              '/models/characterWalk.glb',
+          '/models/characterWalk.glb',
               (walkGltf) => {
                 console.log('Walk character loaded');
                 console.log('Walk animations:', walkGltf.animations.map(a => a.name));
@@ -93,9 +78,10 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
                     mixer.current = animMixer;
                     
                     // Categorize animations
-                    idleAnimations.current = allAnimations.filter(clip => 
-                      clip.name.toLowerCase().includes('idle')
+                    const happyIdle = allAnimations.find(clip => 
+                      clip.name.toLowerCase().includes('happy')
                     );
+                    happyIdleAnimation.current = happyIdle || null;
                     
                     const walkAnims = allAnimations.filter(clip => 
                       clip.name.toLowerCase().includes('walk')
@@ -107,21 +93,18 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
                     );
                     runAnimation.current = runAnims.length > 0 ? runAnims[0] : null;
                     
-                    console.log('Idle animations:', idleAnimations.current.map(a => a.name));
+                    console.log('HappyIdle animation:', happyIdleAnimation.current?.name);
                     console.log('Walk animation:', walkAnimation.current?.name);
                     console.log('Run animation:', runAnimation.current?.name);
                     
                     setModel(loadedModel);
                     
-                    // Play initial idle animation
-                    if (idleAnimations.current.length > 0) {
-                      const randomIdle = idleAnimations.current[
-                        Math.floor(Math.random() * idleAnimations.current.length)
-                      ];
-                      const action = animMixer.clipAction(randomIdle);
+                    // Play HappyIdle initially
+                    if (happyIdleAnimation.current) {
+                      const action = animMixer.clipAction(happyIdleAnimation.current);
                       action.play();
                       currentAction.current = action;
-                      console.log('Playing initial animation:', randomIdle.name);
+                      console.log('Playing initial animation:', happyIdleAnimation.current.name);
                     }
                   },
                   undefined,
@@ -137,13 +120,6 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
                 setModel(loadedModel);
               }
             );
-          },
-          undefined,
-          (error: unknown) => {
-            console.error('Error loading idle character:', error);
-            setModel(loadedModel);
-          }
-        );
       },
       undefined,
       (error: unknown) => {
@@ -156,21 +132,12 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
       if (mixer.current) {
         mixer.current.stopAllAction();
       }
-      if (idleSwitchTimeout.current) {
-        clearTimeout(idleSwitchTimeout.current);
-      }
     };
   }, []);
 
   // Handle animation switching based on movement
   useEffect(() => {
     if (!mixer.current || !currentAction.current) return;
-
-    // Clear idle animation switching when moving
-    if (idleSwitchTimeout.current) {
-      clearTimeout(idleSwitchTimeout.current);
-      idleSwitchTimeout.current = null;
-    }
 
     let targetClip: AnimationClip | null = null;
 
@@ -180,11 +147,9 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
     } else if (isMoving && walkAnimation.current) {
       // Walking
       targetClip = walkAnimation.current;
-    } else if (!isMoving && idleAnimations.current.length > 0) {
-      // Idle - pick a random one
-      targetClip = idleAnimations.current[
-        Math.floor(Math.random() * idleAnimations.current.length)
-      ];
+    } else if (!isMoving && happyIdleAnimation.current) {
+      // Idle - always use HappyIdle
+      targetClip = happyIdleAnimation.current;
     }
 
     if (targetClip && currentAction.current) {
@@ -202,38 +167,6 @@ export const Character = ({ position, isMoving, isRunning }: CharacterProps) => 
       }
     }
   }, [isMoving, isRunning]);
-
-  // Randomly switch between idle animations when idle
-  useEffect(() => {
-    if (isMoving || !mixer.current || idleAnimations.current.length <= 1) return;
-
-    const scheduleNextSwitch = () => {
-      const randomDelay = 5000 + Math.random() * 5000; // 5-10 seconds
-      idleSwitchTimeout.current = setTimeout(() => {
-        if (!isMoving && mixer.current && currentAction.current) {
-          const randomIdle = idleAnimations.current[
-            Math.floor(Math.random() * idleAnimations.current.length)
-          ];
-          
-          const nextAction = mixer.current.clipAction(randomIdle);
-          currentAction.current.fadeOut(0.5);
-          nextAction.reset().fadeIn(0.5).play();
-          currentAction.current = nextAction;
-          
-          console.log('Switching idle to:', randomIdle.name);
-          scheduleNextSwitch();
-        }
-      }, randomDelay);
-    };
-
-    scheduleNextSwitch();
-
-    return () => {
-      if (idleSwitchTimeout.current) {
-        clearTimeout(idleSwitchTimeout.current);
-      }
-    };
-  }, [isMoving, model]);
 
   // Update animation mixer on each frame
   useFrame((_state, delta) => {
